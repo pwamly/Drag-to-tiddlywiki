@@ -1,0 +1,8 @@
+{
+    "id": "com.spikeassociates.tings-drag_to_tiddlywiki",
+    "name": "Drag to tiddlywiki",
+    "description": "Support for Drag to tiddlywiki",
+    "webapp": {
+        "bundle_path": "main.js"
+    }
+}
