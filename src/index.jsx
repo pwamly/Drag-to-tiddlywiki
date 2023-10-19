@@ -1,21 +1,32 @@
 import React from 'react';
+import copy from 'copy-to-clipboard';
 import { getPost } from 'mattermost-redux/selectors/entities/posts';
+import DragToTiddlywiki from './DragToTiddlywiki';
+
 
 class TingsDragToTiddlyWiki {
   initialize(registry, store) {
    const copyToClipboard = async (post) => {
       try {
         // Create the tiddlerData object
-        const tiddlerData = {
-          title: "Graged message",
-          text: post,
-        };
-    
+        if(post){
+          const tiddlerData = {
+            title: "example 4",
+            text: post,
+          };
+
+          console.log('..................................................',post)
         // Encode the tiddlerData object as a URL
         const encodedData = 'data:text/vnd.tiddler,' + encodeURIComponent(JSON.stringify(tiddlerData));
+        // Copy with options
+        copy(encodedData, {
+          debug: true,format:'URL'
+        });
+
+        }
+
+        
     
-        // Use the Clipboard API to copy data to clipboard
-        await navigator.clipboard.writeText(encodedData);
     
         // Provide user feedback (console log or display a message)
         console.log('Data copied to clipboard');
@@ -26,13 +37,12 @@ class TingsDragToTiddlyWiki {
     };
         
 
-    registry.registerPostDropdownMenuAction('Drag to Tiddly Wiki', (e,postId) => {
-      console.log('ttttttttttttttttttttttttttttttttttttttttttttttttttttt',postId)
-      const post = getPost(store.getState(), postId);
-      copyToClipboard(post);
-
+    registry.registerPostDropdownMenuAction('Drag to Tiddly Wiki', (postId) => {
+      const {message} = getPost(store.getState(), postId);
+      copyToClipboard(message);
+      registry.registerRootComponent(DragToTiddlywiki);
       // Verify the structure of 'post' and access the correct property
-      console.log('Post:', post);
+      console.log('Post:', message);
 
     }, () => true);
   }

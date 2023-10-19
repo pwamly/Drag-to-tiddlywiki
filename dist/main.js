@@ -99,49 +99,45 @@ module.exports = __webpack_require__(1);
 
 
 var _react = _interopRequireDefault(__webpack_require__(2));
-var _posts = __webpack_require__(3);
+var _copyToClipboard = _interopRequireDefault(__webpack_require__(3));
+var _posts = __webpack_require__(5);
+var _DragToTiddlywiki = _interopRequireDefault(__webpack_require__(39));
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 class TingsDragToTiddlyWiki {
   initialize(registry, store) {
-    const copyToClipboard = post => {
+    const copyToClipboard = async post => {
       try {
         // Create the tiddlerData object
-        const tiddlerData = {
-          title: "Graged message",
-          text: post
-        };
-
-        // Encode the tiddlerData object as a URL
-        const encodedData = 'data:text/vnd.tiddler,' + encodeURIComponent(JSON.stringify(tiddlerData));
-
-        // Use the clipboardData.setData method to set URL data in the clipboard
-        if (window.clipboardData && window.clipboardData.setData) {
-          window.clipboardData.setData("URL", encodedData);
-
-          // Provide user feedback (console log or display a message)
-          console.log('Data copied to clipboard:', encodedData);
-
-          // Optionally, you can also display a message to the user indicating success
-          alert('URL copied to clipboard');
-        } else {
-          // If clipboardData is not supported, fall back to the Clipboard API
-          throw new Error('Clipboard API is not supported in this browser');
+        if (post) {
+          const tiddlerData = {
+            title: "example 4",
+            text: post
+          };
+          console.log('..................................................', post);
+          // Encode the tiddlerData object as a URL
+          const encodedData = 'data:text/vnd.tiddler,' + encodeURIComponent(JSON.stringify(tiddlerData));
+          // Copy with options
+          (0, _copyToClipboard.default)(encodedData, {
+            debug: true,
+            format: 'URL'
+          });
         }
+
+        // Provide user feedback (console log or display a message)
+        console.log('Data copied to clipboard');
       } catch (error) {
         // Handle any errors that may occur during clipboard access
         console.error('Failed to copy to clipboard:', error);
-
-        // Optionally, you can also display an error message to the user
-        alert('Failed to copy URL to clipboard');
       }
     };
-    registry.registerPostDropdownMenuAction('Drag to Tiddly Wiki', (e, postId) => {
-      console.log('ttttttttttttttttttttttttttttttttttttttttttttttttttttt', postId);
-      const post = (0, _posts.getPost)(store.getState(), postId);
-      copyToClipboard(post);
-
+    registry.registerPostDropdownMenuAction('Drag to Tiddly Wiki', postId => {
+      const {
+        message
+      } = (0, _posts.getPost)(store.getState(), postId);
+      copyToClipboard(message);
+      registry.registerRootComponent(_DragToTiddlywiki.default);
       // Verify the structure of 'post' and access the correct property
-      console.log('Post:', post);
+      console.log('Post:', message);
     }, () => true);
   }
   uninitialize() {
@@ -162,19 +158,186 @@ module.exports = React;
 
 "use strict";
 
+
+var deselectCurrent = __webpack_require__(4);
+
+var clipboardToIE11Formatting = {
+  "text/plain": "Text",
+  "text/html": "Url",
+  "default": "Text"
+}
+
+var defaultMessage = "Copy to clipboard: #{key}, Enter";
+
+function format(message) {
+  var copyKey = (/mac os x/i.test(navigator.userAgent) ? "⌘" : "Ctrl") + "+C";
+  return message.replace(/#{\s*key\s*}/g, copyKey);
+}
+
+function copy(text, options) {
+  var debug,
+    message,
+    reselectPrevious,
+    range,
+    selection,
+    mark,
+    success = false;
+  if (!options) {
+    options = {};
+  }
+  debug = options.debug || false;
+  try {
+    reselectPrevious = deselectCurrent();
+
+    range = document.createRange();
+    selection = document.getSelection();
+
+    mark = document.createElement("span");
+    mark.textContent = text;
+    // avoid screen readers from reading out loud the text
+    mark.ariaHidden = "true"
+    // reset user styles for span element
+    mark.style.all = "unset";
+    // prevents scrolling to the end of the page
+    mark.style.position = "fixed";
+    mark.style.top = 0;
+    mark.style.clip = "rect(0, 0, 0, 0)";
+    // used to preserve spaces and line breaks
+    mark.style.whiteSpace = "pre";
+    // do not inherit user-select (it may be `none`)
+    mark.style.webkitUserSelect = "text";
+    mark.style.MozUserSelect = "text";
+    mark.style.msUserSelect = "text";
+    mark.style.userSelect = "text";
+    mark.addEventListener("copy", function(e) {
+      e.stopPropagation();
+      if (options.format) {
+        e.preventDefault();
+        if (typeof e.clipboardData === "undefined") { // IE 11
+          debug && console.warn("unable to use e.clipboardData");
+          debug && console.warn("trying IE specific stuff");
+          window.clipboardData.clearData();
+          var format = clipboardToIE11Formatting[options.format] || clipboardToIE11Formatting["default"]
+          window.clipboardData.setData(format, text);
+        } else { // all other browsers
+          e.clipboardData.clearData();
+          e.clipboardData.setData(options.format, text);
+        }
+      }
+      if (options.onCopy) {
+        e.preventDefault();
+        options.onCopy(e.clipboardData);
+      }
+    });
+
+    document.body.appendChild(mark);
+
+    range.selectNodeContents(mark);
+    selection.addRange(range);
+
+    var successful = document.execCommand("copy");
+    if (!successful) {
+      throw new Error("copy command was unsuccessful");
+    }
+    success = true;
+  } catch (err) {
+    debug && console.error("unable to copy using execCommand: ", err);
+    debug && console.warn("trying IE specific stuff");
+    try {
+      window.clipboardData.setData(options.format || "text", text);
+      options.onCopy && options.onCopy(window.clipboardData);
+      success = true;
+    } catch (err) {
+      debug && console.error("unable to copy using clipboardData: ", err);
+      debug && console.error("falling back to prompt");
+      message = format("message" in options ? options.message : defaultMessage);
+      window.prompt(message, text);
+    }
+  } finally {
+    if (selection) {
+      if (typeof selection.removeRange == "function") {
+        selection.removeRange(range);
+      } else {
+        selection.removeAllRanges();
+      }
+    }
+
+    if (mark) {
+      document.body.removeChild(mark);
+    }
+    reselectPrevious();
+  }
+
+  return success;
+}
+
+module.exports = copy;
+
+
+/***/ }),
+/* 4 */
+/***/ (function(module, exports) {
+
+
+module.exports = function () {
+  var selection = document.getSelection();
+  if (!selection.rangeCount) {
+    return function () {};
+  }
+  var active = document.activeElement;
+
+  var ranges = [];
+  for (var i = 0; i < selection.rangeCount; i++) {
+    ranges.push(selection.getRangeAt(i));
+  }
+
+  switch (active.tagName.toUpperCase()) { // .toUpperCase handles XHTML
+    case 'INPUT':
+    case 'TEXTAREA':
+      active.blur();
+      break;
+
+    default:
+      active = null;
+      break;
+  }
+
+  selection.removeAllRanges();
+  return function () {
+    selection.type === 'Caret' &&
+    selection.removeAllRanges();
+
+    if (!selection.rangeCount) {
+      ranges.forEach(function(range) {
+        selection.addRange(range);
+      });
+    }
+
+    active &&
+    active.focus();
+  };
+};
+
+
+/***/ }),
+/* 5 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getExpandedLink = exports.makeIsPostCommentMention = exports.isPostIdSending = exports.getUnreadPostsChunk = exports.getPostsChunkInChannelAroundTime = exports.getPostIdsInChannel = exports.getOldestPostsChunkInChannel = exports.getRecentPostsChunkInChannel = exports.getCurrentUsersLatestPost = exports.getLatestReplyablePostId = exports.getMostRecentPostIdInChannel = exports.getLastPostPerChannel = exports.makeGetPostsForIds = exports.makeGetMessageInHistoryItem = exports.getSearchMatches = exports.getSearchResults = exports.makeGetCommentCountForPost = exports.makeGetProfilesForThread = exports.makeGetPostsForThread = exports.makeGetPostsAroundPost = exports.makeGetPostsInChannel = exports.makeGetPostIdsAroundPost = exports.makeGetPostsChunkAroundPost = exports.makeGetPostIdsForThread = exports.getPostsInCurrentChannel = exports.getPostIdsInCurrentChannel = exports.getOpenGraphMetadataForUrl = exports.getOpenGraphMetadata = exports.makeGetReactionsForPost = exports.getReactionsForPosts = exports.getPostsInThread = exports.getPostRepliesCount = exports.getPost = exports.getAllPosts = void 0;
-var tslib_1 = __webpack_require__(4);
-var reselect_1 = __webpack_require__(5);
-var constants_1 = __webpack_require__(6);
-var common_1 = __webpack_require__(23);
-var preferences_1 = __webpack_require__(24);
-var users_1 = __webpack_require__(34);
-var helpers_1 = __webpack_require__(26);
-var post_utils_1 = __webpack_require__(35);
-var preference_utils_1 = __webpack_require__(33);
+var tslib_1 = __webpack_require__(6);
+var reselect_1 = __webpack_require__(7);
+var constants_1 = __webpack_require__(8);
+var common_1 = __webpack_require__(25);
+var preferences_1 = __webpack_require__(26);
+var users_1 = __webpack_require__(36);
+var helpers_1 = __webpack_require__(28);
+var post_utils_1 = __webpack_require__(37);
+var preference_utils_1 = __webpack_require__(35);
 function getAllPosts(state) {
     return state.entities.posts.posts;
 }
@@ -710,7 +873,7 @@ exports.getExpandedLink = getExpandedLink;
 //# sourceMappingURL=posts.js.map
 
 /***/ }),
-/* 4 */
+/* 6 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -1119,7 +1282,7 @@ function __disposeResources(env) {
 
 
 /***/ }),
-/* 5 */
+/* 7 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -1250,7 +1413,7 @@ function createStructuredSelector(selectors) {
 }
 
 /***/ }),
-/* 6 */
+/* 8 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1259,41 +1422,41 @@ function createStructuredSelector(selectors) {
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Threads = exports.Roles = exports.Users = exports.Groups = exports.Plugins = exports.Emoji = exports.Permissions = exports.Stats = exports.Teams = exports.WebsocketEvents = exports.RequestStatus = exports.Files = exports.Posts = exports.Preferences = exports.General = void 0;
-var tslib_1 = __webpack_require__(4);
-var general_1 = tslib_1.__importDefault(__webpack_require__(7));
+var tslib_1 = __webpack_require__(6);
+var general_1 = tslib_1.__importDefault(__webpack_require__(9));
 exports.General = general_1.default;
-var request_status_1 = tslib_1.__importDefault(__webpack_require__(8));
+var request_status_1 = tslib_1.__importDefault(__webpack_require__(10));
 exports.RequestStatus = request_status_1.default;
-var websocket_1 = tslib_1.__importDefault(__webpack_require__(9));
+var websocket_1 = tslib_1.__importDefault(__webpack_require__(11));
 exports.WebsocketEvents = websocket_1.default;
-var preferences_1 = tslib_1.__importDefault(__webpack_require__(10));
+var preferences_1 = tslib_1.__importDefault(__webpack_require__(12));
 exports.Preferences = preferences_1.default;
-var posts_1 = tslib_1.__importDefault(__webpack_require__(11));
+var posts_1 = tslib_1.__importDefault(__webpack_require__(13));
 exports.Posts = posts_1.default;
-var files_1 = tslib_1.__importDefault(__webpack_require__(12));
+var files_1 = tslib_1.__importDefault(__webpack_require__(14));
 exports.Files = files_1.default;
-var teams_1 = tslib_1.__importDefault(__webpack_require__(13));
+var teams_1 = tslib_1.__importDefault(__webpack_require__(15));
 exports.Teams = teams_1.default;
-var stats_1 = tslib_1.__importDefault(__webpack_require__(14));
+var stats_1 = tslib_1.__importDefault(__webpack_require__(16));
 exports.Stats = stats_1.default;
-var permissions_1 = tslib_1.__importDefault(__webpack_require__(16));
+var permissions_1 = tslib_1.__importDefault(__webpack_require__(18));
 exports.Permissions = permissions_1.default;
-var emoji_1 = tslib_1.__importDefault(__webpack_require__(17));
+var emoji_1 = tslib_1.__importDefault(__webpack_require__(19));
 exports.Emoji = emoji_1.default;
-var plugins_1 = tslib_1.__importDefault(__webpack_require__(18));
+var plugins_1 = tslib_1.__importDefault(__webpack_require__(20));
 exports.Plugins = plugins_1.default;
-var groups_1 = tslib_1.__importDefault(__webpack_require__(19));
+var groups_1 = tslib_1.__importDefault(__webpack_require__(21));
 exports.Groups = groups_1.default;
-var users_1 = tslib_1.__importDefault(__webpack_require__(20));
+var users_1 = tslib_1.__importDefault(__webpack_require__(22));
 exports.Users = users_1.default;
-var roles_1 = tslib_1.__importDefault(__webpack_require__(21));
+var roles_1 = tslib_1.__importDefault(__webpack_require__(23));
 exports.Roles = roles_1.default;
-var threads_1 = tslib_1.__importDefault(__webpack_require__(22));
+var threads_1 = tslib_1.__importDefault(__webpack_require__(24));
 exports.Threads = threads_1.default;
 //# sourceMappingURL=index.js.map
 
 /***/ }),
-/* 7 */
+/* 9 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1377,7 +1540,7 @@ exports.default = {
 //# sourceMappingURL=general.js.map
 
 /***/ }),
-/* 8 */
+/* 10 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1394,7 +1557,7 @@ exports.default = status;
 //# sourceMappingURL=request_status.js.map
 
 /***/ }),
-/* 9 */
+/* 11 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1458,7 +1621,7 @@ exports.default = WebsocketEvents;
 //# sourceMappingURL=websocket.js.map
 
 /***/ }),
-/* 10 */
+/* 12 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1626,7 +1789,7 @@ exports.default = Preferences;
 //# sourceMappingURL=preferences.js.map
 
 /***/ }),
-/* 11 */
+/* 13 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1701,7 +1864,7 @@ exports.default = {
 //# sourceMappingURL=posts.js.map
 
 /***/ }),
-/* 12 */
+/* 14 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1725,7 +1888,7 @@ exports.default = Files;
 //# sourceMappingURL=files.js.map
 
 /***/ }),
-/* 13 */
+/* 15 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1741,7 +1904,7 @@ exports.default = {
 //# sourceMappingURL=teams.js.map
 
 /***/ }),
-/* 14 */
+/* 16 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1749,8 +1912,8 @@ exports.default = {
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
-var tslib_1 = __webpack_require__(4);
-var key_mirror_1 = tslib_1.__importDefault(__webpack_require__(15));
+var tslib_1 = __webpack_require__(6);
+var key_mirror_1 = tslib_1.__importDefault(__webpack_require__(17));
 exports.default = key_mirror_1.default({
     TOTAL_USERS: null,
     TOTAL_INACTIVE_USERS: null,
@@ -1779,7 +1942,7 @@ exports.default = key_mirror_1.default({
 //# sourceMappingURL=stats.js.map
 
 /***/ }),
-/* 15 */
+/* 17 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -1830,7 +1993,7 @@ exports.default = keyMirror;
 //# sourceMappingURL=key_mirror.js.map
 
 /***/ }),
-/* 16 */
+/* 18 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2072,7 +2235,7 @@ exports.default = values;
 //# sourceMappingURL=permissions.js.map
 
 /***/ }),
-/* 17 */
+/* 19 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2086,7 +2249,7 @@ exports.default = {
 //# sourceMappingURL=emoji.js.map
 
 /***/ }),
-/* 18 */
+/* 20 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2105,7 +2268,7 @@ exports.default = {
 //# sourceMappingURL=plugins.js.map
 
 /***/ }),
-/* 19 */
+/* 21 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2122,7 +2285,7 @@ exports.default = Groups;
 //# sourceMappingURL=groups.js.map
 
 /***/ }),
-/* 20 */
+/* 22 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2138,7 +2301,7 @@ exports.default = {
 //# sourceMappingURL=users.js.map
 
 /***/ }),
-/* 21 */
+/* 23 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2154,7 +2317,7 @@ exports.default = {
 //# sourceMappingURL=roles.js.map
 
 /***/ }),
-/* 22 */
+/* 24 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2168,7 +2331,7 @@ exports.default = {
 //# sourceMappingURL=threads.js.map
 
 /***/ }),
-/* 23 */
+/* 25 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2177,7 +2340,7 @@ exports.default = {
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUsers = exports.getCurrentUserId = exports.getCurrentUser = exports.getMembersInTeam = exports.getMembersInChannel = exports.getMyCurrentChannelMembership = exports.getMyChannelMemberships = exports.getCurrentChannelId = void 0;
-var reselect_1 = __webpack_require__(5);
+var reselect_1 = __webpack_require__(7);
 // Channels
 function getCurrentChannelId(state) {
     return state.entities.channels.currentChannelId;
@@ -2217,7 +2380,7 @@ exports.getUsers = getUsers;
 //# sourceMappingURL=common.js.map
 
 /***/ }),
-/* 24 */
+/* 26 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2226,13 +2389,13 @@ exports.getUsers = getUsers;
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.shouldAutocloseDMs = exports.shouldShowUnreadsCategory = exports.getSidebarPreferences = exports.makeGetStyleFromTheme = exports.getTheme = exports.getTeammateNameDisplaySetting = exports.getVisibleGroupIds = exports.getVisibleTeammate = exports.getFavoritesPreferences = exports.getGroupShowPreferences = exports.getDirectShowPreferences = exports.makeGetCategory = exports.getInt = exports.getBool = exports.get = exports.getMyPreferences = void 0;
-var tslib_1 = __webpack_require__(4);
-var reselect_1 = __webpack_require__(5);
-var constants_1 = __webpack_require__(6);
-var general_1 = __webpack_require__(25);
-var teams_1 = __webpack_require__(28);
-var helpers_1 = __webpack_require__(26);
-var preference_utils_1 = __webpack_require__(33);
+var tslib_1 = __webpack_require__(6);
+var reselect_1 = __webpack_require__(7);
+var constants_1 = __webpack_require__(8);
+var general_1 = __webpack_require__(27);
+var teams_1 = __webpack_require__(30);
+var helpers_1 = __webpack_require__(28);
+var preference_utils_1 = __webpack_require__(35);
 function getMyPreferences(state) {
     return state.entities.preferences.myPreferences;
 }
@@ -2414,7 +2577,7 @@ exports.shouldAutocloseDMs = shouldAutocloseDMs;
 //# sourceMappingURL=preferences.js.map
 
 /***/ }),
-/* 25 */
+/* 27 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2423,10 +2586,10 @@ exports.shouldAutocloseDMs = shouldAutocloseDMs;
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getServerVersion = exports.getManagedResourcePaths = exports.getAutolinkedUrlSchemes = exports.canDownloadFilesOnMobile = exports.canUploadFilesOnMobile = exports.hasNewPermissions = exports.isCompatibleWithJoinViewTeamPermissions = exports.getSubscriptionStats = exports.warnMetricsStatus = exports.getCurrentUrl = exports.getSupportedTimezones = exports.getLicense = exports.getFeatureFlagValue = exports.getConfig = void 0;
-var tslib_1 = __webpack_require__(4);
-var reselect_1 = __webpack_require__(5);
-var constants_1 = __webpack_require__(6);
-var helpers_1 = __webpack_require__(26);
+var tslib_1 = __webpack_require__(6);
+var reselect_1 = __webpack_require__(7);
+var constants_1 = __webpack_require__(8);
+var helpers_1 = __webpack_require__(28);
 function getConfig(state) {
     return state.entities.general.config;
 }
@@ -2502,7 +2665,7 @@ exports.getServerVersion = getServerVersion;
 //# sourceMappingURL=general.js.map
 
 /***/ }),
-/* 26 */
+/* 28 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2511,9 +2674,9 @@ exports.getServerVersion = getServerVersion;
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildQueryString = exports.isEmail = exports.generateId = exports.isMinimumServerVersion = exports.createShallowSelector = exports.createIdsSelector = exports.memoizeResult = void 0;
-var tslib_1 = __webpack_require__(4);
-var reselect = tslib_1.__importStar(__webpack_require__(5));
-var shallow_equals_1 = tslib_1.__importDefault(__webpack_require__(27));
+var tslib_1 = __webpack_require__(6);
+var reselect = tslib_1.__importStar(__webpack_require__(7));
+var shallow_equals_1 = tslib_1.__importDefault(__webpack_require__(29));
 // eslint-disable-next-line @typescript-eslint/ban-types
 function memoizeResult(func) {
     var lastArgs = null;
@@ -2626,7 +2789,7 @@ exports.buildQueryString = buildQueryString;
 //# sourceMappingURL=helpers.js.map
 
 /***/ }),
-/* 27 */
+/* 29 */
 /***/ (function(module, exports) {
 
 module.exports = shallow
@@ -2711,7 +2874,7 @@ function flat(type) {
 
 
 /***/ }),
-/* 28 */
+/* 30 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2720,14 +2883,14 @@ function flat(type) {
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.makeGetBadgeCountForTeamId = exports.getChannelDrawerBadgeCount = exports.getMyTeamsCount = exports.getMySortedTeamIds = exports.getSortedJoinableTeams = exports.getJoinableTeams = exports.getJoinableTeamIds = exports.getSortedListableTeams = exports.getListableTeams = exports.getListableTeamIds = exports.getTeamMember = exports.getMembersInCurrentTeam = exports.getMyTeamMember = exports.getMyTeams = exports.getCurrentTeamStats = exports.getCurrentRelativeTeamUrl = exports.getCurrentTeamUrl = exports.isCurrentUserCurrentTeamAdmin = exports.getCurrentTeamMembership = exports.getTeam = exports.getCurrentTeam = exports.getTeamsList = exports.getMembersInTeams = exports.getTeamMemberships = exports.getTeamStats = exports.getTeams = exports.getTeamByName = exports.getCurrentTeamId = void 0;
-var tslib_1 = __webpack_require__(4);
-var reselect_1 = __webpack_require__(5);
-var constants_1 = __webpack_require__(6);
-var general_1 = __webpack_require__(25);
-var roles_helpers_1 = __webpack_require__(29);
-var helpers_1 = __webpack_require__(26);
-var user_utils_1 = __webpack_require__(30);
-var team_utils_1 = __webpack_require__(32);
+var tslib_1 = __webpack_require__(6);
+var reselect_1 = __webpack_require__(7);
+var constants_1 = __webpack_require__(8);
+var general_1 = __webpack_require__(27);
+var roles_helpers_1 = __webpack_require__(31);
+var helpers_1 = __webpack_require__(28);
+var user_utils_1 = __webpack_require__(32);
+var team_utils_1 = __webpack_require__(34);
 function getCurrentTeamId(state) {
     return state.entities.teams.currentTeamId;
 }
@@ -2923,7 +3086,7 @@ exports.makeGetBadgeCountForTeamId = makeGetBadgeCountForTeamId;
 //# sourceMappingURL=teams.js.map
 
 /***/ }),
-/* 29 */
+/* 31 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2932,9 +3095,9 @@ exports.makeGetBadgeCountForTeamId = makeGetBadgeCountForTeamId;
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.haveISystemPermission = exports.getMySystemPermissions = exports.getMySystemRoles = exports.getRoles = void 0;
-var tslib_1 = __webpack_require__(4);
-var reselect_1 = __webpack_require__(5);
-var common_1 = __webpack_require__(23);
+var tslib_1 = __webpack_require__(6);
+var reselect_1 = __webpack_require__(7);
+var common_1 = __webpack_require__(25);
 function getRoles(state) {
     return state.entities.roles.roles;
 }
@@ -2983,18 +3146,18 @@ exports.haveISystemPermission = reselect_1.createSelector(exports.getMySystemPer
 //# sourceMappingURL=roles_helpers.js.map
 
 /***/ }),
-/* 30 */
+/* 32 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.applyRolesFilters = exports.sortByUsername = exports.filterProfilesMatchingWithTerm = exports.filterProfilesStartingWithTerm = exports.nameSuggestionsForUser = exports.getSuggestionsSplitByMultiple = exports.getSuggestionsSplitBy = exports.removeUserFromList = exports.profileListToMap = exports.hasPostAllPublicRole = exports.hasPostAllRole = exports.hasUserAccessTokenRole = exports.isChannelAdmin = exports.includesAnAdminRole = exports.isSystemAdmin = exports.isTeamAdmin = exports.isGuest = exports.isAdmin = exports.spaceSeparatedStringIncludes = exports.displayUsername = exports.getFullName = void 0;
-var tslib_1 = __webpack_require__(4);
+var tslib_1 = __webpack_require__(6);
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
-var constants_1 = __webpack_require__(6);
-var i18n_utils_1 = __webpack_require__(31);
+var constants_1 = __webpack_require__(8);
+var i18n_utils_1 = __webpack_require__(33);
 function getFullName(user) {
     if (user.first_name && user.last_name) {
         return user.first_name + ' ' + user.last_name;
@@ -3207,7 +3370,7 @@ exports.applyRolesFilters = applyRolesFilters;
 //# sourceMappingURL=user_utils.js.map
 
 /***/ }),
-/* 31 */
+/* 33 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3231,14 +3394,14 @@ exports.localizeMessage = localizeMessage;
 //# sourceMappingURL=i18n_utils.js.map
 
 /***/ }),
-/* 32 */
+/* 34 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sortTeamsWithLocale = exports.teamListToMap = void 0;
-var constants_1 = __webpack_require__(6);
+var constants_1 = __webpack_require__(8);
 function teamListToMap(teamList) {
     var teams = {};
     for (var i = 0; i < teamList.length; i++) {
@@ -3259,7 +3422,7 @@ exports.sortTeamsWithLocale = sortTeamsWithLocale;
 //# sourceMappingURL=team_utils.js.map
 
 /***/ }),
-/* 33 */
+/* 35 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3268,7 +3431,7 @@ exports.sortTeamsWithLocale = sortTeamsWithLocale;
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isChannelFavorite = exports.getPreferencesByCategory = exports.getPreferenceKey = void 0;
-var constants_1 = __webpack_require__(6);
+var constants_1 = __webpack_require__(8);
 function getPreferenceKey(category, name) {
     return category + "--" + name;
 }
@@ -3292,7 +3455,7 @@ exports.isChannelFavorite = isChannelFavorite;
 //# sourceMappingURL=preference_utils.js.map
 
 /***/ }),
-/* 34 */
+/* 36 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3302,15 +3465,15 @@ exports.isChannelFavorite = isChannelFavorite;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.makeGetProfilesForReactions = exports.getUsersInVisibleDMs = exports.shouldShowTermsOfService = exports.searchProfilesWithoutTeam = exports.searchProfilesNotInCurrentTeam = exports.searchProfilesInTeam = exports.searchProfilesInCurrentTeam = exports.searchProfilesNotInCurrentChannel = exports.searchProfilesInCurrentChannel = exports.makeSearchProfilesInChannel = exports.makeSearchProfilesMatchingWithTerm = exports.makeSearchProfilesStartingWithTerm = exports.getFilteredUsersStats = exports.getTotalUsersStats = exports.getStatusForUserId = exports.getProfilesWithoutTeam = exports.getProfilesNotInCurrentTeam = exports.getProfilesNotInTeam = exports.getProfilesInTeam = exports.getProfilesInCurrentTeam = exports.getProfilesNotInCurrentChannel = exports.getProfilesInCurrentChannel = exports.getIsManualStatusForUserId = exports.filterProfiles = exports.getProfiles = exports.getProfileSetNotInCurrentTeam = exports.getProfileSetInCurrentTeam = exports.getProfileSetNotInCurrentChannel = exports.getProfileSetInCurrentChannel = exports.getCurrentUserMentionKeys = exports.getCurrentUserRoles = exports.currentUserHasAnAdminRole = exports.isCurrentUserSystemAdmin = exports.getUserByEmail = exports.getUsersByEmail = exports.getUserByUsername = exports.getUsersByUsername = exports.getUser = exports.getUserAudits = exports.getUserSessions = exports.getUserStatuses = exports.getUserIdsInGroups = exports.getUserIdsWithoutTeam = exports.getUserIdsNotInTeams = exports.getUserIdsInTeams = exports.getUserIdsNotInChannels = exports.getUserIdsInChannels = exports.getUsers = exports.getCurrentUserId = exports.getCurrentUser = void 0;
 exports.searchProfilesInGroup = exports.getProfilesInGroup = exports.makeGetDisplayName = exports.makeGetProfilesByIdsAndUsernames = exports.makeGetProfilesNotInChannel = exports.makeGetProfilesInChannel = void 0;
-var tslib_1 = __webpack_require__(4);
-var reselect_1 = __webpack_require__(5);
-var common_1 = __webpack_require__(23);
+var tslib_1 = __webpack_require__(6);
+var reselect_1 = __webpack_require__(7);
+var common_1 = __webpack_require__(25);
 Object.defineProperty(exports, "getCurrentUser", { enumerable: true, get: function () { return common_1.getCurrentUser; } });
 Object.defineProperty(exports, "getCurrentUserId", { enumerable: true, get: function () { return common_1.getCurrentUserId; } });
 Object.defineProperty(exports, "getUsers", { enumerable: true, get: function () { return common_1.getUsers; } });
-var general_1 = __webpack_require__(25);
-var preferences_1 = __webpack_require__(24);
-var user_utils_1 = __webpack_require__(30);
+var general_1 = __webpack_require__(27);
+var preferences_1 = __webpack_require__(26);
+var user_utils_1 = __webpack_require__(32);
 function getUserIdsInChannels(state) {
     return state.entities.users.profilesInChannel;
 }
@@ -3721,20 +3884,20 @@ exports.searchProfilesInGroup = searchProfilesInGroup;
 //# sourceMappingURL=users.js.map
 
 /***/ }),
-/* 35 */
+/* 37 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getEmbedFromMetadata = exports.fromAutoResponder = exports.isPostCommentMention = exports.comparePosts = exports.isPostPendingOrFailed = exports.shouldFilterJoinLeavePost = exports.getLastCreateAt = exports.canEditPost = exports.canDeletePost = exports.isEdited = exports.isPostOwner = exports.isUserActivityPost = exports.shouldIgnorePost = exports.isPostEphemeral = exports.isFromWebhook = exports.isMeMessage = exports.isSystemMessage = exports.isPostFlagged = void 0;
-var tslib_1 = __webpack_require__(4);
+var tslib_1 = __webpack_require__(6);
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
-var constants_1 = __webpack_require__(6);
-var general_1 = __webpack_require__(25);
-var roles_1 = __webpack_require__(36);
-var preference_utils_1 = __webpack_require__(33);
+var constants_1 = __webpack_require__(8);
+var general_1 = __webpack_require__(27);
+var roles_1 = __webpack_require__(38);
+var preference_utils_1 = __webpack_require__(35);
 function isPostFlagged(postId, myPreferences) {
     var key = preference_utils_1.getPreferenceKey(constants_1.Preferences.CATEGORY_FLAGGED_POST, postId);
     return myPreferences.hasOwnProperty(key);
@@ -3948,7 +4111,7 @@ exports.getEmbedFromMetadata = getEmbedFromMetadata;
 //# sourceMappingURL=post_utils.js.map
 
 /***/ }),
-/* 36 */
+/* 38 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3957,14 +4120,14 @@ exports.getEmbedFromMetadata = getEmbedFromMetadata;
 // See LICENSE.txt for license information.
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.haveICurrentChannelPermission = exports.haveICurrentTeamPermission = exports.haveIChannelPermission = exports.haveITeamPermission = exports.haveISystemPermission = exports.getMyChannelPermissions = exports.getMyTeamPermissions = exports.getMyCurrentChannelPermissions = exports.getMyCurrentTeamPermissions = exports.getRolesById = exports.getMyRoles = exports.getMyChannelRoles = exports.getMyTeamRoles = exports.getRoles = exports.getMySystemRoles = exports.getMySystemPermissions = void 0;
-var tslib_1 = __webpack_require__(4);
-var reselect_1 = __webpack_require__(5);
-var common_1 = __webpack_require__(23);
-var roles_helpers_1 = __webpack_require__(29);
+var tslib_1 = __webpack_require__(6);
+var reselect_1 = __webpack_require__(7);
+var common_1 = __webpack_require__(25);
+var roles_helpers_1 = __webpack_require__(31);
 Object.defineProperty(exports, "getMySystemPermissions", { enumerable: true, get: function () { return roles_helpers_1.getMySystemPermissions; } });
 Object.defineProperty(exports, "getMySystemRoles", { enumerable: true, get: function () { return roles_helpers_1.getMySystemRoles; } });
 Object.defineProperty(exports, "getRoles", { enumerable: true, get: function () { return roles_helpers_1.getRoles; } });
-var teams_1 = __webpack_require__(28);
+var teams_1 = __webpack_require__(30);
 exports.getMyTeamRoles = reselect_1.createSelector(teams_1.getTeamMemberships, function (teamsMemberships) {
     var roles = {};
     if (teamsMemberships) {
@@ -4216,6 +4379,112 @@ exports.haveICurrentChannelPermission = reselect_1.createSelector(exports.getMyC
     return permissions.has(permission);
 });
 //# sourceMappingURL=roles.js.map
+
+/***/ }),
+/* 39 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+var _react = _interopRequireWildcard(__webpack_require__(2));
+var _reactRedux = __webpack_require__(40);
+function _getRequireWildcardCache(nodeInterop) { if (typeof WeakMap !== "function") return null; var cacheBabelInterop = new WeakMap(); var cacheNodeInterop = new WeakMap(); return (_getRequireWildcardCache = function (nodeInterop) { return nodeInterop ? cacheNodeInterop : cacheBabelInterop; })(nodeInterop); }
+function _interopRequireWildcard(obj, nodeInterop) { if (!nodeInterop && obj && obj.__esModule) { return obj; } if (obj === null || typeof obj !== "object" && typeof obj !== "function") { return { default: obj }; } var cache = _getRequireWildcardCache(nodeInterop); if (cache && cache.has(obj)) { return cache.get(obj); } var newObj = {}; var hasPropertyDescriptor = Object.defineProperty && Object.getOwnPropertyDescriptor; for (var key in obj) { if (key !== "default" && Object.prototype.hasOwnProperty.call(obj, key)) { var desc = hasPropertyDescriptor ? Object.getOwnPropertyDescriptor(obj, key) : null; if (desc && (desc.get || desc.set)) { Object.defineProperty(newObj, key, desc); } else { newObj[key] = obj[key]; } } } newObj.default = obj; if (cache) { cache.set(obj, newObj); } return newObj; }
+const DragToTiddlywiki = ({
+  wik,
+  theme,
+  close
+}) => {
+  const [visible, setVisible] = (0, _react.useState)(true);
+  const [inputValue, setInputValue] = (0, _react.useState)("");
+  // if (!wik) {
+  //   return null;
+  // }
+  const style = getStyle(theme);
+  const handleInputChange = event => {
+    setInputValue(event.target.value);
+  };
+  return visible && /*#__PURE__*/_react.default.createElement("div", {
+    style: style.backdrop
+  }, /*#__PURE__*/_react.default.createElement("div", {
+    style: style.modal
+  }, /*#__PURE__*/_react.default.createElement("h1", {
+    style: style.heading
+  }, "Pwamly is the king"), /*#__PURE__*/_react.default.createElement("div", {
+    className: "todoplugin-button-container",
+    style: style.buttons
+  }, /*#__PURE__*/_react.default.createElement("input", {
+    type: "text",
+    placeholder: "Enter Title...",
+    value: inputValue,
+    onChange: handleInputChange
+  }), /*#__PURE__*/_react.default.createElement("button", {
+    emphasis: "tertiary",
+    size: "medium",
+    onClick: () => setVisible(false)
+  }, "Copy to tiddly"))));
+};
+const mapStateToProps = (state, ownProps) => {
+  // const postId = ownProps.postId.replace("user-activity-", "");
+  // const post = getPost(state, postId);
+
+  try {
+    // if (post.props && post.props.wik) {
+    //   return { wik: post.props.wik };
+    // }
+  } catch (e) {}
+  return {};
+};
+const getStyle = theme => ({
+  backdrop: {
+    position: "absolute",
+    display: "flex",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    // backgroundColor: "rgba(0, 0, 0, 0.50)",
+    background: 'black',
+    zIndex: 2000,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  modal: {
+    position: "relative",
+    width: 600,
+    padding: 24,
+    borderRadius: 8,
+    maxWidth: "100%",
+    color: theme.centerChannelColor,
+    backgroundColor: theme.centerChannelBg
+  },
+  buttons: {
+    marginTop: 24
+  },
+  heading: {
+    fontSize: 20,
+    fontWeight: 600,
+    margin: "0 0 24px 0"
+  },
+  closeIcon: {
+    position: "absolute",
+    top: 8,
+    right: 8
+  }
+});
+var _default = (0, _reactRedux.connect)(mapStateToProps, null)(DragToTiddlywiki);
+exports.default = _default;
+
+/***/ }),
+/* 40 */
+/***/ (function(module, exports) {
+
+module.exports = ReactRedux;
 
 /***/ })
 /******/ ]);
