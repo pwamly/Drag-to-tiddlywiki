@@ -4413,21 +4413,34 @@ const DragToTiddlywiki = ({
     style: style.backdrop
   }, /*#__PURE__*/_react.default.createElement("div", {
     style: style.modal
+  }, /*#__PURE__*/_react.default.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center"
+    }
   }, /*#__PURE__*/_react.default.createElement("h1", {
     style: style.heading
-  }, "Pwamly is the king"), /*#__PURE__*/_react.default.createElement("div", {
-    className: "todoplugin-button-container",
-    style: style.buttons
+  }, "Dragg to tiddlywiki"), /*#__PURE__*/_react.default.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
   }, /*#__PURE__*/_react.default.createElement("input", {
     type: "text",
-    placeholder: "Enter Title...",
+    placeholder: "Enter tiddlywiki Title...",
     value: inputValue,
-    onChange: handleInputChange
-  }), /*#__PURE__*/_react.default.createElement("button", {
+    onChange: handleInputChange,
+    required: true
+  }), /*#__PURE__*/_react.default.createElement("div", {
+    className: "todoplugin-button-container",
+    style: style.buttons
+  }, /*#__PURE__*/_react.default.createElement("button", {
     emphasis: "tertiary",
     size: "medium",
     onClick: () => setVisible(false)
-  }, "Copy to tiddly"))));
+  }, "Copy"))))));
 };
 const mapStateToProps = (state, ownProps) => {
   // const postId = ownProps.postId.replace("user-activity-", "");
@@ -4448,8 +4461,8 @@ const getStyle = theme => ({
     left: 0,
     right: 0,
     bottom: 0,
-    // backgroundColor: "rgba(0, 0, 0, 0.50)",
-    background: 'black',
+    backgroundColor: "rgba(0, 0, 0, 0.50)",
+    // background: "red",
     zIndex: 2000,
     alignItems: "center",
     justifyContent: "center"
@@ -4460,11 +4473,13 @@ const getStyle = theme => ({
     padding: 24,
     borderRadius: 8,
     maxWidth: "100%",
-    color: theme.centerChannelColor,
+    background: "yellow",
+    // color: theme.centerChannelColor,
     backgroundColor: theme.centerChannelBg
   },
   buttons: {
-    marginTop: 24
+    display: "flex",
+    justifyContent: "center"
   },
   heading: {
     fontSize: 20,
