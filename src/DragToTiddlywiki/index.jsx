@@ -16,21 +16,35 @@ const DragToTiddlywiki = ({ wik, theme, close }) => {
     visible && (
       <div style={style.backdrop}>
         <div style={style.modal}>
-          <h1 style={style.heading}>Pwamly is the king</h1>
-          <div className="todoplugin-button-container" style={style.buttons}>
-            <input
-              type="text"
-              placeholder="Enter Title..."
-              value={inputValue}
-              onChange={handleInputChange}
-            />
-            <button
-              emphasis="tertiary"
-              size="medium"
-              onClick={() => setVisible(false)}
-            >
-              {"Copy to tiddly"}
-            </button>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <h1 style={style.heading}>Dragg to tiddlywiki</h1>
+            <div style={{ display: "flex", flexDirection: "column",gap:10 }}>
+              <input
+                type="text"
+                placeholder="Enter tiddlywiki Title..."
+                value={inputValue}
+                onChange={handleInputChange}
+                required
+              />
+              <div
+                className="todoplugin-button-container"
+                style={style.buttons}
+              >
+                <button
+                  emphasis="tertiary"
+                  size="medium"
+                  onClick={() => setVisible(false)}
+                >
+                  {"Copy"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -60,6 +74,7 @@ const getStyle = (theme) => ({
     right: 0,
     bottom: 0,
     backgroundColor: "rgba(0, 0, 0, 0.50)",
+    // background: "red",
     zIndex: 2000,
     alignItems: "center",
     justifyContent: "center",
@@ -70,11 +85,13 @@ const getStyle = (theme) => ({
     padding: 24,
     borderRadius: 8,
     maxWidth: "100%",
-    color: theme.centerChannelColor,
+    background: "yellow",
+    // color: theme.centerChannelColor,
     backgroundColor: theme.centerChannelBg,
   },
   buttons: {
-    marginTop: 24,
+    display: "flex",
+    justifyContent: "center",
   },
   heading: {
     fontSize: 20,
